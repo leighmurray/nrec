@@ -1,0 +1,83 @@
+---
+
+- name: Jack and Jacktrip
+  remote_user: ubuntu
+  connection: ssh
+  gather_facts: false
+  hosts: all
+  tasks:
+
+    - name: Install build-essential, unzip, qt5-default
+      become: yes
+      apt:
+        pkg:
+        - build-essential
+        - unzip
+        - qt5-default
+
+    - name: Download and extract Jack source
+      ansible.builtin.unarchive:
+        src: https://github.com/jackaudio/jack2/archive/v1.9.18.tar.gz
+        dest: /tmp
+        remote_src: yes
+
+    - name: Configure Jack
+      ansible.builtin.shell:
+        cmd: ./waf configure
+        chdir: /tmp/jack2-1.9.18
+
+    - name: Build Jack
+      ansible.builtin.shell:
+        cmd: ./waf
+        chdir: /tmp/jack2-1.9.18
+
+    - name: Install Jack
+      become: yes
+      ansible.builtin.shell:
+        cmd: ./waf install
+        chdir: /tmp/jack2-1.9.18
+
+    - name: Add shared libraries path
+      become: yes
+      ansible.builtin.copy:
+        content: /usr/local/lib
+        dest: /etc/ld.so.conf.d/99local.conf
+
+    - name: Load new libraries path (ldconfig)
+      become: yes
+      ansible.builtin.shell:
+        cmd: /sbin/ldconfig
+
+    - name: Download and extract Jacktrip source
+      ansible.builtin.unarchive:
+        src: https://github.com/jacktrip/jacktrip/archive/refs/heads/main.zip
+        dest: /tmp
+        remote_src: yes
+
+    - name: Build JackTrip
+      ansible.builtin.shell:
+        cmd: ./build
+        chdir: /tmp/jacktrip-main/src
+
+    - name: Copy jacktrip to /usr/local/bin dir
+      become: yes
+      ansible.builtin.copy:
+        src: /tmp/jacktrip-main/builddir/jacktrip
+        dest: /usr/local/bin/jacktrip
+        remote_src: yes
+        mode: '0755'
+
+    - name: Add the ubuntu user to the audio group for realtime permission
+      become: yes
+      ansible.builtin.user:
+        name: ubuntu
+        append: yes
+        groups: audio
+
+    - name: Add permissions for audio group
+      become: yes
+      ansible.builtin.copy:
+        dest: /etc/security/limits.d/audio.conf
+        content: |
+          @audio   -  rtprio     95
+          @audio   -  memlock    unlimited

@@ -1,0 +1,16 @@
+---
+
+- name: Mount production volume
+  remote_user: ubuntu
+  connection: ssh
+  gather_facts: false
+  hosts: all
+  tasks:
+
+    - name: Mount Production Volume
+      become: yes
+      ansible.posix.mount:
+        path: /mnt/productionvol
+        src: /dev/sdb
+        fstype: ext4
+        state: mounted

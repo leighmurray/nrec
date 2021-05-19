@@ -1,0 +1,100 @@
+---
+
+- name: Jack and Jacktrip
+  remote_user: ubuntu
+  connection: ssh
+  gather_facts: false
+  hosts: all
+  tasks:
+
+    # - name: Add cron for jack to run on boot
+    #   ansible.builtin.cron:
+    #     name: "Run Jack Audio"
+    #     special_time: reboot
+    #     job: "jackd -R -ddummy -r48000 -p128"
+
+    # - name: Add cron for jacktrip to run on boot
+    #   ansible.builtin.cron:
+    #     name: "Run Jacktrip Server"
+    #     special_time: reboot
+    #     job: "jacktrip -S -p2"
+
+    - name: Create a service for Jack
+      become: yes
+      ansible.builtin.copy:
+        mode: '0644'
+        dest: /etc/systemd/system/jack.service
+        content: |
+          [Unit]
+          Description=Jack-Server
+          After=network.target
+          [Service]
+          Type=simple
+          User=ubuntu
+          NoNewPrivileges=true
+          ProtectSystem=true
+          ProtectHome=true
+          Nice=-20
+          IOSchedulingClass=realtime
+          IOSchedulingPriority=0
+          # This line below is what you want to edit according to your preferences
+          ExecStart=/usr/local/bin/jackd -R -ddummy -r48000 -p128
+          # end of section you might want to alter
+          Restart=on-failure
+          RestartSec=30
+          StandardOutput=journal
+          StandardError=inherit
+          SyslogIdentifier=jack
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Create a service for Jacktrip
+      become: yes
+      ansible.builtin.copy:
+        mode: '0644'
+        dest: /etc/systemd/system/jacktrip.service
+        content: |
+          [Unit]
+          Description=Jacktrip-Server
+          After=network.target
+          [Service]
+          ExecStartPre=-/bin/sleep 5
+          Type=simple
+          User=ubuntu
+          NoNewPrivileges=true
+          ProtectSystem=true
+          ProtectHome=true
+          Nice=-20
+          IOSchedulingClass=realtime
+          IOSchedulingPriority=0
+          # This line below is what you want to edit according to your preferences
+          ExecStart=/usr/local/bin/jacktrip -S -p2
+          # end of section you might want to alter
+          Restart=on-failure
+          RestartSec=30
+          StandardOutput=journal
+          StandardError=inherit
+          SyslogIdentifier=jacktrip
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Just force systemd to reread configs (2.4 and above)
+      become: yes
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Enable Jack on Boot
+      become: yes
+      ansible.builtin.systemd:
+        name: jack
+        enabled: yes
+
+    - name: Enable Jacktrip on Boot
+      become: yes
+      ansible.builtin.systemd:
+        name: jacktrip
+        enabled: yes
+
+    - name: Unconditionally reboot the machine with all defaults
+      become: yes
+      reboot:
